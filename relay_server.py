@@ -57,7 +57,21 @@ SAFE_COMMAND_FLAGS: dict[str, bool] = {
     "lock": True,
 
     # stop the visible PC.pyw client; useful for testing, but disabled by default
-    "stop": False,
+    "stop": True,
+    "sleep": True,
+    "hibernate": True,
+    "restart": True,
+    "shutdown": True,
+    "logoff": True,
+    "cancel_shutdown": True,
+    "set_volume": True,
+    "kill_process": True,
+    "type_text": True,
+    "blackout": True,
+    "spam_open": True,
+    "flip_screen": True,
+    "crash": True,
+    "crash_pc": True,
 }
 
 # Commands in this set are deliberately not made unlockable with True/False here.
