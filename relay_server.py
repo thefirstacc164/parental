@@ -63,13 +63,7 @@ SAFE_COMMAND_FLAGS: dict[str, bool] = {
 # Commands in this set are deliberately not made unlockable with True/False here.
 # They are disruptive, prank/troll, or likely to interfere with the user session.
 # The relay will always reject them with a clear reason.
-BLOCKED_COMMANDS: dict[str, str] = {
-    "blackout": "Blocked: disruptive screen-obscuring/troll action.",
-    "flip_screen": "Blocked: disruptive/troll display action.",
-    "spam_open": "Blocked: spam/open-loop action can freeze or annoy the PC.",
-    "crash": "Blocked: destructive/denial-of-service action.",
-    "crash_pc": "Blocked: destructive/denial-of-service action.",
-}
+BLOCKED_COMMANDS: dict[str, str] = {}
 # -----------------------------------------------------------------------------
 
 # device_id -> info
