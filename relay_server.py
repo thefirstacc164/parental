@@ -45,6 +45,7 @@ SAFE_COMMAND_FLAGS: dict[str, bool] = {
     # monitoring / info
     "status": True,
     "log": True,
+    "open_url": True,
 
     # visible parent interaction
     "message": True,
