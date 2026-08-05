@@ -13,6 +13,7 @@ This version allows EVERY command. No locks, no blocked commands.
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import socket
 import threading
@@ -21,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 HOST = "0.0.0.0"
-PORT = 9000
+PORT = int(os.environ.get("PORT", "9000"))
 
 # Same token must be in relay_server.py, MENU.pyw, and PC.pyw.
 RELAY_TOKEN = "thefirstaccievercreated164thefirstaccievercreated165thefirstaccievercreated166"
@@ -138,19 +139,23 @@ class RelayHandler(BaseHTTPRequestHandler):
         return secrets.compare_digest(supplied, RELAY_TOKEN)
 
     def do_GET(self) -> None:
-        if self.path == "/health":
-            self.send_json(
-                200,
-                {
-                    "ok": True,
-                    "server": "PCT relay",
-                    "time": now(),
-                    "enabled_commands": enabled_commands(),
-                    "locked_safe_commands": locked_safe_commands(),
-                    "always_blocked_commands": sorted(BLOCKED_COMMANDS.keys()),
-                },
-            )
+        if self.path == "/" or self.path == "/health":
+            html = """<!DOCTYPE html>
+<html>
+<head><title>Parental Control Relay</title></head>
+<body>
+<h1>Relay is alive</h1>
+<p>OK</p>
+</body>
+</html>"""
+            body = html.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
+
         self.send_json(404, {"ok": False, "error": "Unknown endpoint"})
 
     def do_POST(self) -> None:
