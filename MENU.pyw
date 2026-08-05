@@ -3,17 +3,13 @@ MENU.pyw - Parent Control Dashboard
 
 Requires: relay_server.py running locally.
 
-This is the styled dashboard version with persistent checkmark device selection:
-  ☐ not selected
-  ☑ selected
-
-Click a device once to select it. Click the same device again to deselect it.
-Selection is kept after actions and after Refresh Devices, as long as the device
-still exists in the relay device list.
+Click a device once to select it. Click again to deselect it.
 """
 
 from __future__ import annotations
 
+import base64
+import io
 import json
 import threading
 import time
@@ -21,7 +17,7 @@ import tkinter as tk
 import tkinter.ttk as ttk
 import urllib.error
 import urllib.request
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 from typing import Any
 
 # === EDIT THIS TO MATCH relay_server.py and PC.pyw ===
@@ -31,7 +27,6 @@ RELAY_TOKEN = "thefirstaccievercreated164thefirstaccievercreated165thefirstaccie
 DEFAULT_RELAY_URL = "https://parental-controll-url.onrender.com"
 APP_TITLE = "Parent Control Dashboard"
 
-# ── colour palette ────────────────────────────────────────────────────────────
 BG = "#1e1e2e"
 PANEL = "#2a2a3e"
 ACCENT = "#0078d4"
@@ -45,10 +40,7 @@ BTN_H = 2
 BTN_W = 18
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Relay helper
-# ─────────────────────────────────────────────────────────────────────────────
-def relay_request(base_url: str, path: str, data: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
+def relay_request(base_url: str, path: str, data: dict[str, Any], timeout: int = 30) -> dict[str, Any]:
     url = base_url.rstrip("/") + path
     payload = dict(data)
     payload["token"] = RELAY_TOKEN
@@ -72,9 +64,6 @@ def relay_request(base_url: str, path: str, data: dict[str, Any], timeout: int =
         raise RuntimeError(f"Connection failed: {exc.reason}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Styled widget helpers
-# ─────────────────────────────────────────────────────────────────────────────
 def styled_btn(
     parent: tk.Widget,
     text: str,
@@ -182,9 +171,6 @@ def separator(parent: tk.Widget) -> None:
     tk.Frame(parent, bg="#3a3a5e", height=1).pack(fill="x", padx=6, pady=6)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Main Application
-# ─────────────────────────────────────────────────────────────────────────────
 class App:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -201,7 +187,6 @@ class App:
 
         self._build_ui()
 
-    # ── UI ──────────────────────────────────────────────────────────────────
     def _build_ui(self) -> None:
         top = tk.Frame(self.root, bg="#13131f", pady=6)
         top.pack(fill="x")
@@ -340,7 +325,6 @@ class App:
         self._build_tab_parental(nb)
         self._build_tab_troll(nb)
 
-    # ── Tab: Control ────────────────────────────────────────────────────────
     def _build_tab_control(self, nb: ttk.Notebook) -> None:
         tab = tk.Frame(nb, bg=PANEL)
         nb.add(tab, text="📋 Control")
@@ -350,6 +334,14 @@ class App:
         f1.pack(fill="x", padx=6)
         styled_btn(f1, "Status", lambda: self.cmd("status"), ACCENT3).grid(row=0, column=0, padx=4, pady=4)
         styled_btn(f1, "Get Log", lambda: self.cmd("log", {"lines": 80}), ACCENT3).grid(row=0, column=1, padx=4, pady=4)
+
+        separator(tab)
+        section_label(tab, "Monitoring").pack(fill="x", pady=(0, 2))
+        fmon = tk.Frame(tab, bg=PANEL)
+        fmon.pack(fill="x", padx=6)
+        styled_btn(fmon, "Process List", lambda: self.cmd("process_list"), ACCENT).grid(row=0, column=0, padx=4, pady=4)
+        styled_btn(fmon, "Chrome History", lambda: self.cmd("chrome_history", {"limit": 20}), ACCENT).grid(row=0, column=1, padx=4, pady=4)
+        styled_btn(fmon, "Close Tab", lambda: self.confirm_cmd("close_tab", "Close current browser tab?"), ACCENT2).grid(row=0, column=2, padx=4, pady=4)
 
         separator(tab)
         section_label(tab, "Startup").pack(fill="x", pady=(0, 2))
@@ -370,9 +362,16 @@ class App:
 
         separator(tab)
         section_label(tab, "Send Message").pack(fill="x", pady=(0, 2))
-        self.msg_title = entry_row(tab, "Title:", "Message from parent", width=22)
-        self.msg_body = entry_row(tab, "Message:", "Take a break!", width=22)
-        styled_btn(tab, "📨 Send Message", self.send_message, ACCENT).pack(padx=10, pady=6, anchor="w")
+        self.msg_title = entry_row(tab, "Title:", "Message from parent", width=18)
+        self.msg_body = entry_row(tab, "Message:", "Take a break!", width=18)
+
+        row_msg = tk.Frame(tab, bg=PANEL)
+        row_msg.pack(fill="x", padx=6, pady=2)
+        tk.Label(row_msg, text="Scale:", bg=PANEL, fg=TEXT, font=("Segoe UI", 9), width=8, anchor="w").pack(side="left")
+        self.msg_scale = tk.StringVar(value="1")
+        ttk.Combobox(row_msg, textvariable=self.msg_scale, values=["1", "2", "4"], state="readonly", width=4).pack(side="left")
+        styled_btn(row_msg, "📨 Send Message", self.send_message, ACCENT, width=18).pack(side="left", padx=6)
+        styled_btn(row_msg, "🔊 Speak", self.speak_message, ACCENT3, width=12).pack(side="left", padx=6)
 
         separator(tab)
         section_label(tab, "Lock").pack(fill="x", pady=(0, 2))
@@ -408,7 +407,6 @@ class App:
             width=16,
         ).pack(side="left", padx=3)
 
-    # ── Tab: Power ──────────────────────────────────────────────────────────
     def _build_tab_power(self, nb: ttk.Notebook) -> None:
         tab = tk.Frame(nb, bg=PANEL)
         nb.add(tab, text="⚡ Power")
@@ -496,7 +494,6 @@ class App:
         threading.Thread(target=_do, daemon=True).start()
         self.log(f"Give time: cancel + shutdown in {extra}s queued.")
 
-    # ── Tab: Parental ────────────────────────────────────────────────────────
     def _build_tab_parental(self, nb: ttk.Notebook) -> None:
         tab = tk.Frame(nb, bg=PANEL)
         nb.add(tab, text="👁 Parental")
@@ -537,7 +534,6 @@ class App:
             padx=10, pady=4, anchor="w"
         )
 
-    # ── Tab: Troll ──────────────────────────────────────────────────────────
     def _build_tab_troll(self, nb: ttk.Notebook) -> None:
         tab = tk.Frame(nb, bg=PANEL)
         nb.add(tab, text="😈 Troll")
@@ -565,6 +561,11 @@ class App:
             "#2c2c54",
             width=20,
         ).pack(padx=10, pady=4, anchor="w")
+
+        separator(tab)
+        section_label(tab, "Send Fullscreen Image").pack(fill="x", pady=(0, 2))
+        self.img_duration = spin_row(tab, "Duration (s):", 1, 300, 10)
+        styled_btn(tab, "🖼 Send Image", self.send_image, "#8e44ad", width=20).pack(padx=10, pady=4, anchor="w")
 
         separator(tab)
         section_label(tab, "Spam Open Programs").pack(fill="x", pady=(0, 2))
@@ -643,7 +644,6 @@ class App:
                 height=1,
             ).grid(row=r, column=c, padx=3, pady=3)
 
-    # ── Device selection / checkmarks ───────────────────────────────────────
     def selected_device_id(self) -> str | None:
         if not self.selected_device_id_value:
             messagebox.showerror(APP_TITLE, "Select a device first. Click a device to check it; click again to uncheck it.")
@@ -686,7 +686,6 @@ class App:
                 f"{mark} {d.get('computer')} / {d.get('user')}  {online}  {startup}  {tray_state}  [{device_id}]",
             )
 
-    # ── Core command helpers ─────────────────────────────────────────────────
     def cmd(self, action: str, args: dict[str, Any] | None = None) -> None:
         device_id = self.selected_device_id()
         if not device_id:
@@ -757,7 +756,47 @@ class App:
         if not body:
             messagebox.showerror(APP_TITLE, "Message body is empty.")
             return
-        self.cmd("message", {"title": title, "message": body})
+        scale = int(self.msg_scale.get())
+        self.cmd("message", {"title": title, "message": body, "scale": scale})
+
+    def speak_message(self) -> None:
+        body = self.msg_body.get().strip()
+        if not body:
+            messagebox.showerror(APP_TITLE, "Text is empty.")
+            return
+        self.cmd("speak", {"text": body})
+
+    def send_image(self) -> None:
+        device_id = self.selected_device_id()
+        if not device_id:
+            return
+
+        path = filedialog.askopenfilename(
+            title="Select an image",
+            filetypes=[("Images", "*.png *.jpg *.jpeg *.bmp *.gif"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+
+        try:
+            from PIL import Image
+
+            img = Image.open(path)
+            img.thumbnail((800, 800), Image.LANCZOS)
+            tmp = io.BytesIO()
+            img.save(tmp, "PNG")
+            data_b64 = base64.b64encode(tmp.getvalue()).decode("utf-8")
+            duration = self.img_duration.get()
+            args = {"image_data": data_b64, "duration": duration}
+            if self.test_mode.get():
+                args["test"] = True
+            threading.Thread(
+                target=self._send_command_thread,
+                args=("show_image", args, device_id),
+                daemon=True,
+            ).start()
+        except Exception as exc:
+            messagebox.showerror(APP_TITLE, f"Could not process image:\n{exc}")
 
     def refresh_devices(self) -> None:
         if RELAY_TOKEN.startswith("CHANGE-ME"):
@@ -773,7 +812,6 @@ class App:
         self.devices = result.get("devices", [])
         current_ids = {str(d.get("device_id", "")) for d in self.devices}
 
-        # Keep the selected device only if the relay still knows it.
         if self.selected_device_id_value and self.selected_device_id_value not in current_ids:
             self.selected_device_id_value = None
 
@@ -784,7 +822,6 @@ class App:
         else:
             self.set_status(f"Found {len(self.devices)} device(s). Click a device to select it.")
 
-    # ── Utility ──────────────────────────────────────────────────────────────
     def set_status(self, text: str) -> None:
         self.root.after(0, lambda: self.status_var.set(text))
         self.log(text)
@@ -801,7 +838,6 @@ class App:
         self.root.after(0, _insert)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 def main() -> None:
     root = tk.Tk()
     App(root)
